@@ -11,12 +11,12 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
-          <Globe className="h-8 w-8 text-blue-600" />
-          <span className="text-xl font-bold text-gray-900">{SITE_NAME}</span>
+          <Globe className="h-8 w-8 text-primary" />
+          <span className="text-xl font-bold text-foreground">{SITE_NAME}</span>
         </Link>
 
         {/* Desktop Navigation */}
@@ -26,8 +26,8 @@ export function Header() {
               key={link.href}
               href={link.href}
               className={cn(
-                'px-4 py-2 text-sm font-medium text-gray-600 rounded-lg',
-                'hover:bg-gray-100 hover:text-gray-900 transition-colors'
+                'px-4 py-2 text-sm font-medium text-muted-foreground rounded-lg',
+                'hover:bg-accent hover:text-accent-foreground transition-colors'
               )}
             >
               {link.label}
@@ -45,7 +45,7 @@ export function Header() {
         {/* Mobile Menu Button */}
         <button
           type="button"
-          className="md:hidden rounded-lg p-2 text-gray-600 hover:bg-gray-100"
+          className="md:hidden rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
         >
@@ -59,13 +59,13 @@ export function Header() {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-gray-200 bg-white">
+        <div className="md:hidden border-t border-border bg-background">
           <div className="space-y-1 px-4 py-3">
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="block rounded-lg px-3 py-2 text-base font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                className="block rounded-lg px-3 py-2 text-base font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 {link.label}

@@ -6,12 +6,12 @@ import { cn } from "@/lib/utils";
 const alertVariants = cva("relative w-full rounded-lg border p-4 flex gap-3", {
   variants: {
     variant: {
-      default: "bg-gray-50 border-gray-200 text-gray-800",
-      info: "bg-blue-50 border-blue-200 text-blue-800",
-      success: "bg-green-50 border-green-200 text-green-800",
-      warning: "bg-yellow-50 border-yellow-200 text-yellow-800",
-      error: "bg-red-50 border-red-200 text-red-800",
-      destructive: "bg-red-50 border-red-500 text-red-800",
+      default: "bg-background text-foreground border-border",
+      info: "bg-primary/10 border-primary/20 text-primary",
+      success: "bg-success/10 border-success/20 text-success",
+      warning: "bg-warning/10 border-warning/20 text-warning-foreground",
+      error: "bg-destructive/10 border-destructive/20 text-destructive",
+      destructive: "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive",
     },
   },
   defaultVariants: {
@@ -30,7 +30,7 @@ const iconMap = {
 
 export interface AlertProps
   extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof alertVariants> {
+  VariantProps<typeof alertVariants> {
   showIcon?: boolean;
 }
 

@@ -186,10 +186,10 @@ export function FEIECalculator() {
                     value={progressPercentage}
                     className={
                       formData.daysOutsideUS >= 330
-                        ? '[&>div]:bg-green-500'
+                        ? '[&>div]:bg-success'
                         : progressPercentage >= 90
-                        ? '[&>div]:bg-yellow-500'
-                        : '[&>div]:bg-blue-500'
+                          ? '[&>div]:bg-warning'
+                          : '[&>div]:bg-primary'
                     }
                   />
                 </div>
@@ -274,7 +274,7 @@ export function FEIECalculator() {
       {showResult && result && (
         <div className="space-y-4">
           {/* Qualification Status */}
-          <Card className={result.qualifies ? 'border-green-500' : 'border-red-500'}>
+          <Card className={result.qualifies ? 'border-success' : 'border-destructive'}>
             <CardHeader>
               <div className="flex items-center gap-3">
                 {result.qualifies ? (

@@ -264,9 +264,9 @@ export function TaxResidencyChecker() {
               key={result.countryCode}
               className={
                 result.isResident
-                  ? "border-red-500"
+                  ? "border-destructive"
                   : result.riskLevel === "high"
-                    ? "border-yellow-500"
+                    ? "border-warning"
                     : ""
               }
             >
@@ -298,12 +298,12 @@ export function TaxResidencyChecker() {
                     value={result.percentageOfThreshold}
                     className={
                       result.isResident
-                        ? "[&>div]:bg-red-500"
+                        ? "[&>div]:bg-destructive"
                         : result.riskLevel === "high"
-                          ? "[&>div]:bg-yellow-500"
+                          ? "[&>div]:bg-warning"
                           : result.riskLevel === "medium"
-                            ? "[&>div]:bg-blue-500"
-                            : "[&>div]:bg-green-500"
+                            ? "[&>div]:bg-primary"
+                            : "[&>div]:bg-success"
                     }
                   />
                 </div>

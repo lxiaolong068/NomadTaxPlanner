@@ -3,7 +3,7 @@
 import { useState, useMemo, useSyncExternalStore } from "react";
 
 // Custom hook for hydration-safe mounting
-const emptySubscribe = () => () => {};
+const emptySubscribe = () => () => { };
 function useHydrated() {
   return useSyncExternalStore(
     emptySubscribe,
@@ -111,8 +111,8 @@ export function DayTracker() {
     () =>
       mounted
         ? trips.filter(
-            (trip) => new Date(trip.startDate).getFullYear() === selectedYear,
-          )
+          (trip) => new Date(trip.startDate).getFullYear() === selectedYear,
+        )
         : [],
     [mounted, trips, selectedYear],
   );
@@ -396,15 +396,15 @@ export function DayTracker() {
                 getThresholdForCountry(s.countryCode),
               ) === "resident",
           ) && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Tax Residency Alert</AlertTitle>
-              <AlertDescription>
-                You have exceeded the residency threshold in one or more
-                countries. Please consult a tax professional.
-              </AlertDescription>
-            </Alert>
-          )}
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Tax Residency Alert</AlertTitle>
+                <AlertDescription>
+                  You have exceeded the residency threshold in one or more
+                  countries. Please consult a tax professional.
+                </AlertDescription>
+              </Alert>
+            )}
 
           {countrySummaries.map((summary) => {
             const threshold = getThresholdForCountry(summary.countryCode);
@@ -423,9 +423,9 @@ export function DayTracker() {
                 key={summary.countryCode}
                 className={
                   riskLevel === "resident"
-                    ? "border-red-500"
+                    ? "border-destructive"
                     : riskLevel === "high"
-                      ? "border-yellow-500"
+                      ? "border-warning"
                       : ""
                 }
               >
@@ -471,12 +471,12 @@ export function DayTracker() {
                       value={percentage}
                       className={
                         riskLevel === "resident"
-                          ? "[&>div]:bg-red-500"
+                          ? "[&>div]:bg-destructive"
                           : riskLevel === "high"
-                            ? "[&>div]:bg-yellow-500"
+                            ? "[&>div]:bg-warning"
                             : riskLevel === "medium"
-                              ? "[&>div]:bg-blue-500"
-                              : "[&>div]:bg-green-500"
+                              ? "[&>div]:bg-primary"
+                              : "[&>div]:bg-success"
                       }
                     />
                     {summary.totalDays < threshold && (
