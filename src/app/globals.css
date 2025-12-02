@@ -12,14 +12,16 @@
     --color-popover: hsl(0 0% 100%);
     --color-popover-foreground: hsl(222.2 84% 4.9%);
 
-    --color-primary: hsl(222.2 47.4% 11.2%);
+    /* Premium Blue (Interstellar) */
+    --color-primary: hsl(221.2 83.2% 53.3%);
     --color-primary-foreground: hsl(210 40% 98%);
 
     --color-secondary: hsl(210 40% 96.1%);
     --color-secondary-foreground: hsl(222.2 47.4% 11.2%);
 
     --color-muted: hsl(210 40% 96.1%);
-    --color-muted-foreground: hsl(215.4 16.3% 46.9%);
+    /* Darkened for better readability */
+    --color-muted-foreground: hsl(215.4 16.3% 35%);
 
     --color-accent: hsl(210 40% 96.1%);
     --color-accent-foreground: hsl(222.2 47.4% 11.2%);
@@ -33,15 +35,15 @@
     --color-warning: hsl(45.4 93.4% 47.5%);
     --color-warning-foreground: hsl(26 83.3% 14.1%);
 
-    --color-border: hsl(214.3 31.8% 91.4%);
-    --color-input: hsl(214.3 31.8% 91.4%);
-    --color-ring: hsl(222.2 84% 4.9%);
+    --color-border: hsl(214.3 31.8% 88%);
+    --color-input: hsl(214.3 31.8% 88%);
+    --color-ring: hsl(221.2 83.2% 53.3%);
 
     /* Border radius */
     --radius-sm: 0.25rem;
-    --radius-md: 0.375rem;
-    --radius-lg: 0.5rem;
-    --radius-xl: 0.75rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
 
     /* Font family */
     --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
