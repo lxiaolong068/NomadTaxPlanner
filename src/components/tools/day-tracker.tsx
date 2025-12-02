@@ -1,16 +1,6 @@
 "use client";
 
-import { useState, useMemo, useSyncExternalStore } from "react";
-
-// Custom hook for hydration-safe mounting
-const emptySubscribe = () => () => { };
-function useHydrated() {
-  return useSyncExternalStore(
-    emptySubscribe,
-    () => true,
-    () => false,
-  );
-}
+import { useState, useMemo, useCallback } from "react";
 import {
   Calendar,
   Plus,
@@ -37,28 +27,36 @@ import { Select } from "@/components/ui/select";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { SUPPORTED_COUNTRIES, TAX_THRESHOLDS } from "@/lib/constants";
+import { SUPPORTED_COUNTRIES } from "@/lib/constants";
+import {
+  CURRENT_YEAR,
+  getYearOptions,
+  getCountryOptions,
+  getThresholdForCountry,
+  getRiskLevel,
+  getRiskBadgeVariant,
+  getRiskProgressClass,
+  getRiskAriaLabel,
+} from "@/lib/form-utils";
 import { useDayTrackerStore } from "@/store/day-tracker-store";
-// Types imported for reference, used in store
+import { useHydrated } from "@/hooks";
 import { format } from "date-fns";
 
-const currentYear = new Date().getFullYear();
-
-const purposeOptions = [
+const PURPOSE_OPTIONS = [
   { value: "work", label: "💼 Work" },
   { value: "leisure", label: "🏖️ Leisure" },
   { value: "transit", label: "✈️ Transit" },
-];
+] as const;
 
-const purposeIcons = {
+const PURPOSE_ICONS = {
   work: Briefcase,
   leisure: Coffee,
   transit: Plane,
-};
+} as const;
 
 export function DayTracker() {
   const mounted = useHydrated();
-  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedYear, setSelectedYear] = useState(CURRENT_YEAR);
   const [showAddForm, setShowAddForm] = useState(false);
   const [expandedCountries, setExpandedCountries] = useState<Set<string>>(
     new Set(),
@@ -82,25 +80,9 @@ export function DayTracker() {
     (state) => state.getCountrySummaries,
   );
 
-  // Hydration is now handled by useHydrated hook
-
-  const countryOptions = useMemo(
-    () =>
-      SUPPORTED_COUNTRIES.map((c) => ({
-        value: c.code,
-        label: `${c.flag} ${c.name}`,
-      })),
-    [],
-  );
-
-  const yearOptions = useMemo(
-    () =>
-      Array.from({ length: 5 }, (_, i) => ({
-        value: String(currentYear - i),
-        label: String(currentYear - i),
-      })),
-    [],
-  );
+  // Memoized options - only compute once
+  const countryOptions = useMemo(() => getCountryOptions(), []);
+  const yearOptions = useMemo(() => getYearOptions(5), []);
 
   const countrySummaries = useMemo(
     () => (mounted ? getCountrySummaries(selectedYear) : []),
@@ -111,8 +93,8 @@ export function DayTracker() {
     () =>
       mounted
         ? trips.filter(
-          (trip) => new Date(trip.startDate).getFullYear() === selectedYear,
-        )
+            (trip) => new Date(trip.startDate).getFullYear() === selectedYear,
+          )
         : [],
     [mounted, trips, selectedYear],
   );
@@ -122,7 +104,27 @@ export function DayTracker() {
     [countrySummaries],
   );
 
-  const handleAddTrip = () => {
+  // Memoized count of residencies triggered
+  const residenciesTriggered = useMemo(
+    () =>
+      countrySummaries.filter(
+        (s) => s.totalDays >= getThresholdForCountry(s.countryCode),
+      ).length,
+    [countrySummaries],
+  );
+
+  // Check if any country has triggered residency
+  const hasResidentCountry = useMemo(
+    () =>
+      countrySummaries.some(
+        (s) =>
+          getRiskLevel(s.totalDays, getThresholdForCountry(s.countryCode)) ===
+          "resident",
+      ),
+    [countrySummaries],
+  );
+
+  const handleAddTrip = useCallback(() => {
     if (!formData.countryCode || !formData.startDate || !formData.endDate)
       return;
 
@@ -149,19 +151,21 @@ export function DayTracker() {
       notes: "",
     });
     setShowAddForm(false);
-  };
+  }, [formData, addTrip]);
 
-  const toggleCountryExpand = (countryCode: string) => {
-    const newExpanded = new Set(expandedCountries);
-    if (newExpanded.has(countryCode)) {
-      newExpanded.delete(countryCode);
-    } else {
-      newExpanded.add(countryCode);
-    }
-    setExpandedCountries(newExpanded);
-  };
+  const toggleCountryExpand = useCallback((countryCode: string) => {
+    setExpandedCountries((prev) => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(countryCode)) {
+        newExpanded.delete(countryCode);
+      } else {
+        newExpanded.add(countryCode);
+      }
+      return newExpanded;
+    });
+  }, []);
 
-  const exportData = () => {
+  const exportData = useCallback(() => {
     const data = {
       exportDate: new Date().toISOString(),
       year: selectedYear,
@@ -177,39 +181,23 @@ export function DayTracker() {
     a.download = `nomad-tax-tracker-${selectedYear}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  };
+  }, [selectedYear, tripsForYear, countrySummaries]);
 
-  const getThresholdForCountry = (countryCode: string): number => {
-    // Thailand uses 180 days, most others use 183
-    return countryCode === "TH" ? 180 : TAX_THRESHOLDS.DEFAULT_RESIDENCY_DAYS;
-  };
-
-  const getRiskLevel = (days: number, threshold: number) => {
-    const percentage = (days / threshold) * 100;
-    if (days >= threshold) return "resident";
-    if (percentage >= 90) return "high";
-    if (percentage >= 70) return "medium";
-    return "low";
-  };
-
-  const getRiskBadgeVariant = (riskLevel: string) => {
-    switch (riskLevel) {
-      case "resident":
-        return "destructive";
-      case "high":
-        return "warning";
-      case "medium":
-        return "secondary";
-      default:
-        return "success";
+  const handleClearAll = useCallback(() => {
+    if (
+      confirm(
+        "Are you sure you want to delete all trips? This cannot be undone.",
+      )
+    ) {
+      clearAllTrips();
     }
-  };
+  }, [clearAllTrips]);
 
   if (!mounted) {
     return (
       <Card>
         <CardContent className="py-8">
-          <div className="text-center text-muted-foreground">
+          <div className="text-center text-muted-foreground" role="status">
             Loading your travel data...
           </div>
         </CardContent>
@@ -225,7 +213,7 @@ export function DayTracker() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
+                <Calendar className="h-5 w-5" aria-hidden="true" />
                 Day Tracker
               </CardTitle>
               <CardDescription>
@@ -238,14 +226,16 @@ export function DayTracker() {
                 value={String(selectedYear)}
                 onChange={(value) => setSelectedYear(Number(value))}
                 className="w-28"
+                aria-label="Select tax year"
               />
               <Button
                 variant="outline"
                 size="sm"
                 onClick={exportData}
                 disabled={trips.length === 0}
+                aria-label={`Export ${selectedYear} travel data as JSON`}
               >
-                <Download className="h-4 w-4 mr-1" />
+                <Download className="h-4 w-4 mr-1" aria-hidden="true" />
                 Export
               </Button>
             </div>
@@ -253,7 +243,11 @@ export function DayTracker() {
         </CardHeader>
         <CardContent>
           {/* Year Summary */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div
+            className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"
+            role="region"
+            aria-label={`Travel summary for ${selectedYear}`}
+          >
             <div className="text-center p-4 bg-muted rounded-lg">
               <div className="text-2xl font-bold">{tripsForYear.length}</div>
               <div className="text-sm text-muted-foreground">Total Trips</div>
@@ -271,13 +265,7 @@ export function DayTracker() {
               </div>
             </div>
             <div className="text-center p-4 bg-muted rounded-lg">
-              <div className="text-2xl font-bold">
-                {
-                  countrySummaries.filter(
-                    (s) => s.totalDays >= getThresholdForCountry(s.countryCode),
-                  ).length
-                }
-              </div>
+              <div className="text-2xl font-bold">{residenciesTriggered}</div>
               <div className="text-sm text-muted-foreground">
                 Residencies Triggered
               </div>
@@ -286,19 +274,33 @@ export function DayTracker() {
 
           {/* Add Trip Button */}
           {!showAddForm ? (
-            <Button onClick={() => setShowAddForm(true)} className="w-full">
-              <Plus className="h-4 w-4 mr-2" />
+            <Button
+              onClick={() => setShowAddForm(true)}
+              className="w-full"
+              aria-expanded={showAddForm}
+              aria-controls="add-trip-form"
+            >
+              <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
               Add New Trip
             </Button>
           ) : (
-            <div className="border rounded-lg p-4 space-y-4">
+            <div
+              id="add-trip-form"
+              className="border rounded-lg p-4 space-y-4"
+              role="form"
+              aria-label="Add new trip form"
+            >
               <h3 className="font-medium">Add New Trip</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium mb-1 block">
+                  <label
+                    htmlFor="trip-country"
+                    className="text-sm font-medium mb-1 block"
+                  >
                     Country
                   </label>
                   <Select
+                    id="trip-country"
                     options={countryOptions}
                     value={formData.countryCode}
                     onChange={(value) =>
@@ -308,11 +310,15 @@ export function DayTracker() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium mb-1 block">
+                  <label
+                    htmlFor="trip-purpose"
+                    className="text-sm font-medium mb-1 block"
+                  >
                     Purpose
                   </label>
                   <Select
-                    options={purposeOptions}
+                    id="trip-purpose"
+                    options={[...PURPOSE_OPTIONS]}
                     value={formData.purpose}
                     onChange={(value) =>
                       setFormData({
@@ -323,10 +329,14 @@ export function DayTracker() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium mb-1 block">
+                  <label
+                    htmlFor="trip-start-date"
+                    className="text-sm font-medium mb-1 block"
+                  >
                     Start Date
                   </label>
                   <Input
+                    id="trip-start-date"
                     type="date"
                     value={formData.startDate}
                     onChange={(e) =>
@@ -335,10 +345,14 @@ export function DayTracker() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium mb-1 block">
+                  <label
+                    htmlFor="trip-end-date"
+                    className="text-sm font-medium mb-1 block"
+                  >
                     End Date
                   </label>
                   <Input
+                    id="trip-end-date"
                     type="date"
                     value={formData.endDate}
                     min={formData.startDate}
@@ -349,10 +363,14 @@ export function DayTracker() {
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium mb-1 block">
+                <label
+                  htmlFor="trip-notes"
+                  className="text-sm font-medium mb-1 block"
+                >
                   Notes (optional)
                 </label>
                 <Input
+                  id="trip-notes"
                   value={formData.notes}
                   onChange={(e) =>
                     setFormData({ ...formData, notes: e.target.value })
@@ -384,27 +402,21 @@ export function DayTracker() {
       {countrySummaries.length > 0 ? (
         <div className="space-y-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
+            <MapPin className="h-5 w-5" aria-hidden="true" />
             Countries in {selectedYear}
           </h2>
 
           {/* Warnings for high-risk countries */}
-          {countrySummaries.some(
-            (s) =>
-              getRiskLevel(
-                s.totalDays,
-                getThresholdForCountry(s.countryCode),
-              ) === "resident",
-          ) && (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Tax Residency Alert</AlertTitle>
-                <AlertDescription>
-                  You have exceeded the residency threshold in one or more
-                  countries. Please consult a tax professional.
-                </AlertDescription>
-              </Alert>
-            )}
+          {hasResidentCountry && (
+            <Alert variant="destructive" role="alert">
+              <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+              <AlertTitle>Tax Residency Alert</AlertTitle>
+              <AlertDescription>
+                You have exceeded the residency threshold in one or more
+                countries. Please consult a tax professional.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {countrySummaries.map((summary) => {
             const threshold = getThresholdForCountry(summary.countryCode);
@@ -416,6 +428,11 @@ export function DayTracker() {
             const isExpanded = expandedCountries.has(summary.countryCode);
             const country = SUPPORTED_COUNTRIES.find(
               (c) => c.code === summary.countryCode,
+            );
+            const ariaLabel = getRiskAriaLabel(
+              riskLevel,
+              summary.totalDays,
+              threshold,
             );
 
             return (
@@ -430,12 +447,18 @@ export function DayTracker() {
                 }
               >
                 <CardHeader className="pb-2">
-                  <div
-                    className="flex items-center justify-between cursor-pointer"
+                  <button
+                    type="button"
+                    className="flex items-center justify-between cursor-pointer w-full text-left"
                     onClick={() => toggleCountryExpand(summary.countryCode)}
+                    aria-expanded={isExpanded}
+                    aria-controls={`trips-${summary.countryCode}`}
+                    aria-label={`${summary.countryName}: ${ariaLabel}. Click to ${isExpanded ? "collapse" : "expand"} trip details.`}
                   >
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl">{country?.flag}</span>
+                      <span className="text-2xl" aria-hidden="true">
+                        {country?.flag}
+                      </span>
                       <div>
                         <CardTitle className="text-lg">
                           {summary.countryName}
@@ -447,16 +470,28 @@ export function DayTracker() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Badge variant={getRiskBadgeVariant(riskLevel)}>
+                      <Badge
+                        variant={getRiskBadgeVariant(riskLevel)}
+                        aria-label={ariaLabel}
+                      >
                         {summary.totalDays} days
+                        {riskLevel === "resident" && (
+                          <span className="sr-only"> - Tax Resident</span>
+                        )}
                       </Badge>
                       {isExpanded ? (
-                        <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                        <ChevronUp
+                          className="h-5 w-5 text-muted-foreground"
+                          aria-hidden="true"
+                        />
                       ) : (
-                        <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                        <ChevronDown
+                          className="h-5 w-5 text-muted-foreground"
+                          aria-hidden="true"
+                        />
                       )}
                     </div>
-                  </div>
+                  </button>
                 </CardHeader>
                 <CardContent>
                   {/* Progress Bar */}
@@ -469,15 +504,8 @@ export function DayTracker() {
                     </div>
                     <Progress
                       value={percentage}
-                      className={
-                        riskLevel === "resident"
-                          ? "[&>div]:bg-destructive"
-                          : riskLevel === "high"
-                            ? "[&>div]:bg-warning"
-                            : riskLevel === "medium"
-                              ? "[&>div]:bg-primary"
-                              : "[&>div]:bg-success"
-                      }
+                      className={getRiskProgressClass(riskLevel)}
+                      aria-label={ariaLabel}
                     />
                     {summary.totalDays < threshold && (
                       <div className="text-sm text-muted-foreground">
@@ -489,17 +517,23 @@ export function DayTracker() {
 
                   {/* Trip List */}
                   {isExpanded && (
-                    <div className="space-y-2 mt-4 pt-4 border-t">
+                    <div
+                      id={`trips-${summary.countryCode}`}
+                      className="space-y-2 mt-4 pt-4 border-t"
+                    >
                       <h4 className="text-sm font-medium">Trip History</h4>
                       {summary.trips.map((trip) => {
-                        const PurposeIcon = purposeIcons[trip.purpose];
+                        const PurposeIcon = PURPOSE_ICONS[trip.purpose];
                         return (
                           <div
                             key={trip.id}
                             className="flex items-center justify-between py-2 px-3 bg-muted rounded-lg"
                           >
                             <div className="flex items-center gap-3">
-                              <PurposeIcon className="h-4 w-4 text-muted-foreground" />
+                              <PurposeIcon
+                                className="h-4 w-4 text-muted-foreground"
+                                aria-hidden="true"
+                              />
                               <div>
                                 <div className="text-sm font-medium">
                                   {format(new Date(trip.startDate), "MMM d")} -{" "}
@@ -521,7 +555,7 @@ export function DayTracker() {
                                 e.stopPropagation();
                                 removeTrip(trip.id);
                               }}
-                              aria-label="Remove trip"
+                              aria-label={`Remove trip to ${summary.countryName} from ${format(new Date(trip.startDate), "MMM d")} to ${format(new Date(trip.endDate), "MMM d, yyyy")}`}
                             >
                               <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                             </Button>
@@ -541,18 +575,10 @@ export function DayTracker() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  if (
-                    confirm(
-                      "Are you sure you want to delete all trips? This cannot be undone.",
-                    )
-                  ) {
-                    clearAllTrips();
-                  }
-                }}
+                onClick={handleClearAll}
                 className="text-destructive hover:text-destructive"
               >
-                <Trash2 className="h-4 w-4 mr-2" />
+                <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
                 Clear All Trips
               </Button>
             </div>
@@ -561,7 +587,10 @@ export function DayTracker() {
       ) : (
         <Card>
           <CardContent className="py-12 text-center">
-            <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <Calendar
+              className="h-12 w-12 mx-auto text-muted-foreground mb-4"
+              aria-hidden="true"
+            />
             <h3 className="text-lg font-medium mb-2">
               No trips recorded for {selectedYear}
             </h3>
@@ -569,7 +598,7 @@ export function DayTracker() {
               Start tracking your travels to monitor tax residency thresholds.
             </p>
             <Button onClick={() => setShowAddForm(true)}>
-              <Plus className="h-4 w-4 mr-2" />
+              <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
               Add Your First Trip
             </Button>
           </CardContent>

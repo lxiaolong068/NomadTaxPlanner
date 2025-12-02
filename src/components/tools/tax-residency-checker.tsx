@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   AlertTriangle,
   CheckCircle,
@@ -24,6 +24,15 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { SUPPORTED_COUNTRIES } from "@/lib/constants";
+import {
+  CURRENT_YEAR,
+  getYearOptions,
+  getCountryOptions,
+  getRiskBadgeVariant,
+  getRiskLabel,
+  getRiskProgressClass,
+  getRiskAriaLabel,
+} from "@/lib/form-utils";
 import { calculateResidencyStatus } from "@/lib/calculations/tax-residency";
 import { ResidencyResult } from "@/types";
 
@@ -34,69 +43,64 @@ interface CountryEntry {
   days: number;
 }
 
-const currentYear = new Date().getFullYear();
+/** Maximum days in a year (accounting for leap years) */
+const MAX_DAYS_IN_YEAR = 366;
 
 export function TaxResidencyChecker() {
-  const [year, setYear] = useState(currentYear);
+  const [year, setYear] = useState(CURRENT_YEAR);
   const [entries, setEntries] = useState<CountryEntry[]>([
     { id: "1", countryCode: "", countryName: "", days: 0 },
   ]);
   const [results, setResults] = useState<ResidencyResult[]>([]);
   const [showResults, setShowResults] = useState(false);
 
-  const countryOptions = useMemo(
-    () =>
-      SUPPORTED_COUNTRIES.map((c) => ({
-        value: c.code,
-        label: `${c.flag} ${c.name}`,
-      })),
-    [],
+  // Memoized options - only compute once
+  const countryOptions = useMemo(() => getCountryOptions(), []);
+  const yearOptions = useMemo(() => getYearOptions(5), []);
+
+  // Check if any results indicate residency
+  const hasResidentResults = useMemo(
+    () => results.some((r) => r.isResident),
+    [results],
   );
 
-  const yearOptions = useMemo(
-    () =>
-      Array.from({ length: 5 }, (_, i) => ({
-        value: String(currentYear - i),
-        label: String(currentYear - i),
-      })),
-    [],
-  );
-
-  const addEntry = () => {
-    setEntries([
-      ...entries,
+  const addEntry = useCallback(() => {
+    setEntries((prev) => [
+      ...prev,
       { id: Date.now().toString(), countryCode: "", countryName: "", days: 0 },
     ]);
-  };
+  }, []);
 
-  const removeEntry = (id: string) => {
-    if (entries.length > 1) {
-      setEntries(entries.filter((e) => e.id !== id));
-    }
-  };
+  const removeEntry = useCallback((id: string) => {
+    setEntries((prev) => {
+      if (prev.length > 1) {
+        return prev.filter((e) => e.id !== id);
+      }
+      return prev;
+    });
+  }, []);
 
-  const updateEntry = (
-    id: string,
-    field: keyof CountryEntry,
-    value: string | number,
-  ) => {
-    setEntries(
-      entries.map((e) => {
-        if (e.id !== id) return e;
-        if (field === "countryCode") {
-          const country = SUPPORTED_COUNTRIES.find((c) => c.code === value);
-          return {
-            ...e,
-            countryCode: value as string,
-            countryName: country?.name || "",
-          };
-        }
-        return { ...e, [field]: value };
-      }),
-    );
-  };
+  const updateEntry = useCallback(
+    (id: string, field: keyof CountryEntry, value: string | number) => {
+      setEntries((prev) =>
+        prev.map((e) => {
+          if (e.id !== id) return e;
+          if (field === "countryCode") {
+            const country = SUPPORTED_COUNTRIES.find((c) => c.code === value);
+            return {
+              ...e,
+              countryCode: value as string,
+              countryName: country?.name || "",
+            };
+          }
+          return { ...e, [field]: value };
+        }),
+      );
+    },
+    [],
+  );
 
-  const calculateResults = () => {
+  const calculateResults = useCallback(() => {
     const validEntries = entries.filter((e) => e.countryCode && e.days > 0);
     if (validEntries.length === 0) return;
 
@@ -117,39 +121,15 @@ export function TaxResidencyChecker() {
 
     setResults(calculatedResults);
     setShowResults(true);
-  };
+  }, [entries, year]);
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setEntries([{ id: "1", countryCode: "", countryName: "", days: 0 }]);
     setResults([]);
     setShowResults(false);
-  };
+  }, []);
 
-  const getRiskBadgeVariant = (riskLevel: ResidencyResult["riskLevel"]) => {
-    switch (riskLevel) {
-      case "resident":
-        return "destructive";
-      case "high":
-        return "warning";
-      case "medium":
-        return "secondary";
-      default:
-        return "success";
-    }
-  };
-
-  const getRiskLabel = (riskLevel: ResidencyResult["riskLevel"]) => {
-    switch (riskLevel) {
-      case "resident":
-        return "Tax Resident";
-      case "high":
-        return "High Risk";
-      case "medium":
-        return "Medium Risk";
-      default:
-        return "Low Risk";
-    }
-  };
+  const hasValidEntries = entries.some((e) => e.countryCode && e.days > 0);
 
   return (
     <div className="space-y-6">
@@ -157,7 +137,7 @@ export function TaxResidencyChecker() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
+            <MapPin className="h-5 w-5" aria-hidden="true" />
             Enter Your Travel Data
           </CardTitle>
           <CardDescription>
@@ -168,21 +148,33 @@ export function TaxResidencyChecker() {
         <CardContent className="space-y-4">
           {/* Year Selection */}
           <div className="flex items-center gap-4">
-            <label className="text-sm font-medium">Tax Year:</label>
+            <label htmlFor="residency-year" className="text-sm font-medium">
+              Tax Year:
+            </label>
             <Select
+              id="residency-year"
               options={yearOptions}
               value={String(year)}
               onChange={(value) => setYear(Number(value))}
               className="w-32"
+              aria-label="Select tax year for residency check"
             />
           </div>
 
           {/* Country Entries */}
-          <div className="space-y-3">
-            {entries.map((entry) => (
-              <div key={entry.id} className="flex items-center gap-3">
+          <div className="space-y-3" role="list" aria-label="Country entries">
+            {entries.map((entry, index) => (
+              <div
+                key={entry.id}
+                className="flex items-center gap-3"
+                role="listitem"
+              >
                 <div className="flex-1">
+                  <label htmlFor={`country-${entry.id}`} className="sr-only">
+                    Country {index + 1}
+                  </label>
                   <Select
+                    id={`country-${entry.id}`}
                     options={countryOptions}
                     value={entry.countryCode}
                     onChange={(value) =>
@@ -192,10 +184,14 @@ export function TaxResidencyChecker() {
                   />
                 </div>
                 <div className="w-32">
+                  <label htmlFor={`days-${entry.id}`} className="sr-only">
+                    Days spent in {entry.countryName || `country ${index + 1}`}
+                  </label>
                   <Input
+                    id={`days-${entry.id}`}
                     type="number"
                     min={0}
-                    max={366}
+                    max={MAX_DAYS_IN_YEAR}
                     value={entry.days || ""}
                     onChange={(e) =>
                       updateEntry(
@@ -212,9 +208,9 @@ export function TaxResidencyChecker() {
                   size="icon"
                   onClick={() => removeEntry(entry.id)}
                   disabled={entries.length === 1}
-                  aria-label="Remove country"
+                  aria-label={`Remove ${entry.countryName || "country"} entry`}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </div>
             ))}
@@ -222,13 +218,17 @@ export function TaxResidencyChecker() {
 
           {/* Add Country Button */}
           <Button variant="outline" onClick={addEntry} className="w-full">
-            <Plus className="h-4 w-4 mr-2" />
+            <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
             Add Another Country
           </Button>
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4">
-            <Button onClick={calculateResults} className="flex-1">
+            <Button
+              onClick={calculateResults}
+              className="flex-1"
+              disabled={!hasValidEntries}
+            >
               Check Residency Status
             </Button>
             <Button variant="outline" onClick={resetForm}>
@@ -240,16 +240,20 @@ export function TaxResidencyChecker() {
 
       {/* Results */}
       {showResults && results.length > 0 && (
-        <div className="space-y-4">
+        <div
+          className="space-y-4"
+          role="region"
+          aria-label="Tax residency check results"
+        >
           <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
+            <Calendar className="h-5 w-5" aria-hidden="true" />
             Results for {year}
           </h2>
 
           {/* Summary Alert */}
-          {results.some((r) => r.isResident) && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
+          {hasResidentResults && (
+            <Alert variant="destructive" role="alert">
+              <AlertTriangle className="h-4 w-4" aria-hidden="true" />
               <AlertTitle>Tax Residency Triggered</AlertTitle>
               <AlertDescription>
                 You may be considered a tax resident in one or more countries.
@@ -259,126 +263,141 @@ export function TaxResidencyChecker() {
           )}
 
           {/* Individual Country Results */}
-          {results.map((result) => (
-            <Card
-              key={result.countryCode}
-              className={
-                result.isResident
-                  ? "border-destructive"
-                  : result.riskLevel === "high"
-                    ? "border-warning"
-                    : ""
-              }
-            >
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">
-                    {
-                      SUPPORTED_COUNTRIES.find(
-                        (c) => c.code === result.countryCode,
-                      )?.flag
-                    }{" "}
-                    {result.countryName}
-                  </CardTitle>
-                  <Badge variant={getRiskBadgeVariant(result.riskLevel)}>
-                    {getRiskLabel(result.riskLevel)}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Progress Bar */}
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>
-                      {result.daysSpent} of {result.threshold} days
-                    </span>
-                    <span>{result.percentageOfThreshold}%</span>
+          {results.map((result) => {
+            const ariaLabel = getRiskAriaLabel(
+              result.riskLevel,
+              result.daysSpent,
+              result.threshold,
+            );
+
+            return (
+              <Card
+                key={result.countryCode}
+                className={
+                  result.isResident
+                    ? "border-destructive"
+                    : result.riskLevel === "high"
+                      ? "border-warning"
+                      : ""
+                }
+              >
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">
+                      <span aria-hidden="true">
+                        {
+                          SUPPORTED_COUNTRIES.find(
+                            (c) => c.code === result.countryCode,
+                          )?.flag
+                        }{" "}
+                      </span>
+                      {result.countryName}
+                    </CardTitle>
+                    <Badge
+                      variant={getRiskBadgeVariant(result.riskLevel)}
+                      aria-label={ariaLabel}
+                    >
+                      {getRiskLabel(result.riskLevel)}
+                    </Badge>
                   </div>
-                  <Progress
-                    value={result.percentageOfThreshold}
-                    className={
-                      result.isResident
-                        ? "[&>div]:bg-destructive"
-                        : result.riskLevel === "high"
-                          ? "[&>div]:bg-warning"
-                          : result.riskLevel === "medium"
-                            ? "[&>div]:bg-primary"
-                            : "[&>div]:bg-success"
-                    }
-                  />
-                </div>
-
-                {/* Tax Rule Info */}
-                <div className="text-sm text-muted-foreground">
-                  <p className="font-medium">
-                    Tax Rule: {result.taxRule.testType}
-                  </p>
-                  <p>{result.taxRule.description}</p>
-                </div>
-
-                {/* Days Remaining */}
-                {!result.isResident && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Info className="h-4 w-4 text-blue-500" />
-                    <span>
-                      <strong>{result.daysRemaining}</strong> days remaining
-                      before potential residency
-                    </span>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Progress Bar */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>
+                        {result.daysSpent} of {result.threshold} days
+                      </span>
+                      <span>{result.percentageOfThreshold}%</span>
+                    </div>
+                    <Progress
+                      value={result.percentageOfThreshold}
+                      className={getRiskProgressClass(result.riskLevel)}
+                      aria-label={ariaLabel}
+                    />
                   </div>
-                )}
 
-                {/* Warnings */}
-                {result.warnings.length > 0 && (
-                  <div className="space-y-1">
-                    {result.warnings.map((warning, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-start gap-2 text-sm text-yellow-600"
-                      >
-                        <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                        <span>{warning}</span>
-                      </div>
-                    ))}
+                  {/* Tax Rule Info */}
+                  <div className="text-sm text-muted-foreground">
+                    <p className="font-medium">
+                      Tax Rule: {result.taxRule.testType}
+                    </p>
+                    <p>{result.taxRule.description}</p>
                   </div>
-                )}
 
-                {/* Recommendations */}
-                {result.recommendations.length > 0 && (
-                  <div className="space-y-1">
-                    {result.recommendations.map((rec, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-start gap-2 text-sm text-green-600"
-                      >
-                        <CheckCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                        <span>{rec}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                  {/* Days Remaining */}
+                  {!result.isResident && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Info
+                        className="h-4 w-4 text-blue-500"
+                        aria-hidden="true"
+                      />
+                      <span>
+                        <strong>{result.daysRemaining}</strong> days remaining
+                        before potential residency
+                      </span>
+                    </div>
+                  )}
 
-                {/* Special Rules */}
-                {result.taxRule.specialRules.length > 0 && (
-                  <details className="text-sm">
-                    <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
-                      View special rules for {result.countryName}
-                    </summary>
-                    <ul className="mt-2 space-y-1 pl-4 text-muted-foreground">
-                      {result.taxRule.specialRules.map((rule, idx) => (
-                        <li key={idx} className="list-disc">
-                          {rule}
-                        </li>
+                  {/* Warnings */}
+                  {result.warnings.length > 0 && (
+                    <div className="space-y-1" role="alert">
+                      {result.warnings.map((warning, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-start gap-2 text-sm text-yellow-600"
+                        >
+                          <AlertTriangle
+                            className="h-4 w-4 mt-0.5 flex-shrink-0"
+                            aria-hidden="true"
+                          />
+                          <span>{warning}</span>
+                        </div>
                       ))}
-                    </ul>
-                  </details>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                    </div>
+                  )}
+
+                  {/* Recommendations */}
+                  {result.recommendations.length > 0 && (
+                    <div className="space-y-1">
+                      {result.recommendations.map((rec, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-start gap-2 text-sm text-green-600"
+                        >
+                          <CheckCircle
+                            className="h-4 w-4 mt-0.5 flex-shrink-0"
+                            aria-hidden="true"
+                          />
+                          <span>{rec}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Special Rules */}
+                  {result.taxRule.specialRules.length > 0 && (
+                    <details className="text-sm">
+                      <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
+                        View special rules for {result.countryName}
+                      </summary>
+                      <ul className="mt-2 space-y-1 pl-4 text-muted-foreground">
+                        {result.taxRule.specialRules.map((rule, idx) => (
+                          <li key={idx} className="list-disc">
+                            {rule}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
 
           {/* Disclaimer */}
           <Alert>
-            <Info className="h-4 w-4" />
+            <Info className="h-4 w-4" aria-hidden="true" />
             <AlertTitle>Important Disclaimer</AlertTitle>
             <AlertDescription>
               This tool provides general guidance only and should not be

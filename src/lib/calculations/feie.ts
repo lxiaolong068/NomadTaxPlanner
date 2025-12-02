@@ -2,15 +2,28 @@ import { FEIEInput, FEIEResult } from "@/types";
 import { TAX_THRESHOLDS } from "@/lib/constants";
 import { differenceInDays, format } from "date-fns";
 
-// FEIE maximum exclusion amounts by year
-const FEIE_MAX_EXCLUSIONS: Record<number, number> = {
+/**
+ * Supported tax years for FEIE calculations.
+ * Update this type when adding new years.
+ */
+export type SupportedTaxYear = 2020 | 2021 | 2022 | 2023 | 2024 | 2025;
+
+/**
+ * FEIE maximum exclusion amounts by tax year.
+ * Source: IRS Publication 54
+ * Note: 2025 is estimated, update when official figures are released.
+ */
+const FEIE_MAX_EXCLUSIONS: Record<SupportedTaxYear, number> = {
+  2020: 107600,
+  2021: 108700,
+  2022: 112000,
+  2023: 120000,
   2024: 126500,
   2025: 130000, // Estimated, update when official
-  2023: 120000,
-  2022: 112000,
-  2021: 108700,
-  2020: 107600,
 };
+
+/** Default tax year to use when requested year is not in our records */
+const DEFAULT_TAX_YEAR: SupportedTaxYear = 2024;
 
 const PHYSICAL_PRESENCE_REQUIRED_DAYS =
   TAX_THRESHOLDS.FEIE_PHYSICAL_PRESENCE_DAYS; // 330 days
@@ -44,7 +57,8 @@ export function calculateFEIE(input: FEIEInput): FEIEResult {
 
   // Get max exclusion for the tax year
   const maxExclusion =
-    FEIE_MAX_EXCLUSIONS[taxYear] || FEIE_MAX_EXCLUSIONS[2024];
+    FEIE_MAX_EXCLUSIONS[taxYear as SupportedTaxYear] ??
+    FEIE_MAX_EXCLUSIONS[DEFAULT_TAX_YEAR];
 
   // Calculate pro-rated exclusion if test period doesn't cover full year
   // Pro-ration = (qualifying days in tax year / 365) * max exclusion
@@ -213,7 +227,21 @@ export function findOptimalTestPeriod(
 
 /**
  * Get FEIE max exclusion for a given year
+ * @param year - Tax year to get exclusion for
+ * @returns Maximum exclusion amount for the year
  */
 export function getFEIEMaxExclusion(year: number): number {
-  return FEIE_MAX_EXCLUSIONS[year] || FEIE_MAX_EXCLUSIONS[2024];
+  return (
+    FEIE_MAX_EXCLUSIONS[year as SupportedTaxYear] ??
+    FEIE_MAX_EXCLUSIONS[DEFAULT_TAX_YEAR]
+  );
+}
+
+/**
+ * Check if a year is a supported tax year with known FEIE exclusion
+ * @param year - Year to check
+ * @returns True if year has known FEIE exclusion data
+ */
+export function isSupportedTaxYear(year: number): year is SupportedTaxYear {
+  return year in FEIE_MAX_EXCLUSIONS;
 }
