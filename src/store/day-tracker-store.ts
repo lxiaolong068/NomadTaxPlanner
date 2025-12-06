@@ -3,7 +3,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { TripRecord, CountrySummary } from '@/types'
-import { calculateDaysBetween } from '@/lib/utils'
+import { calculateDaysBetween, formatDate } from '@/lib/utils'
 
 interface DayTrackerState {
   trips: TripRecord[]
@@ -80,38 +80,63 @@ export const useDayTrackerStore = create<DayTrackerState>()(
         const { trips } = get()
         const filteredTrips = year
           ? trips.filter((trip) => {
-              const tripYear = new Date(trip.startDate).getFullYear()
-              return tripYear === year
+              const tripStart = new Date(`${trip.startDate}T00:00:00`)
+              const tripEnd = new Date(`${trip.endDate}T00:00:00`)
+              const yearStart = new Date(`${year}-01-01T00:00:00`)
+              const yearEnd = new Date(`${year}-12-31T00:00:00`)
+              return tripStart <= yearEnd && tripEnd >= yearStart
             })
           : trips
 
         const countryMap = new Map<string, CountrySummary>()
 
         filteredTrips.forEach((trip) => {
+          const tripStart = new Date(`${trip.startDate}T00:00:00`)
+          const tripEnd = new Date(`${trip.endDate}T00:00:00`)
+          const yearStart = year ? new Date(`${year}-01-01T00:00:00`) : null
+          const yearEnd = year ? new Date(`${year}-12-31T00:00:00`) : null
+
+          // If a specific year is selected, allocate only the overlapping days
+          const overlapStart =
+            yearStart && tripStart < yearStart ? yearStart : tripStart
+          const overlapEnd = yearEnd && tripEnd > yearEnd ? yearEnd : tripEnd
+
+          const daysForPeriod =
+            year && (overlapEnd < overlapStart)
+              ? 0
+              : calculateDaysBetween(overlapStart, overlapEnd)
+
+          const daysToAdd = year ? daysForPeriod : trip.days
+          if (year && daysToAdd === 0) {
+            return
+          }
+
+          const firstVisitDate = year
+            ? overlapStart
+            : tripStart
+          const lastVisitDate = year ? overlapEnd : tripEnd
+
           const existing = countryMap.get(trip.countryCode)
 
           if (existing) {
-            existing.totalDays += trip.days
+            existing.totalDays += daysToAdd
             existing.trips.push(trip)
 
             // Update first and last visit dates
-            const tripStart = new Date(trip.startDate)
-            const tripEnd = new Date(trip.endDate)
-
-            if (tripStart < new Date(existing.firstVisit)) {
-              existing.firstVisit = trip.startDate
+            if (firstVisitDate < new Date(existing.firstVisit)) {
+              existing.firstVisit = formatDate(firstVisitDate)
             }
-            if (tripEnd > new Date(existing.lastVisit)) {
-              existing.lastVisit = trip.endDate
+            if (lastVisitDate > new Date(existing.lastVisit)) {
+              existing.lastVisit = formatDate(lastVisitDate)
             }
           } else {
             countryMap.set(trip.countryCode, {
               countryCode: trip.countryCode,
               countryName: trip.countryName,
-              totalDays: trip.days,
+              totalDays: daysToAdd,
               trips: [trip],
-              firstVisit: trip.startDate,
-              lastVisit: trip.endDate,
+              firstVisit: formatDate(firstVisitDate),
+              lastVisit: formatDate(lastVisitDate),
             })
           }
         })
@@ -130,8 +155,11 @@ export const useDayTrackerStore = create<DayTrackerState>()(
       getTripsForYear: (year: number) => {
         const { trips } = get()
         return trips.filter((trip) => {
-          const tripYear = new Date(trip.startDate).getFullYear()
-          return tripYear === year
+          const tripStart = new Date(`${trip.startDate}T00:00:00`)
+          const tripEnd = new Date(`${trip.endDate}T00:00:00`)
+          const yearStart = new Date(`${year}-01-01T00:00:00`)
+          const yearEnd = new Date(`${year}-12-31T00:00:00`)
+          return tripStart <= yearEnd && tripEnd >= yearStart
         })
       },
     }),

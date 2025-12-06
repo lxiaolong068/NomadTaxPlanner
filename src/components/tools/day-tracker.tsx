@@ -27,7 +27,7 @@ import { Select } from "@/components/ui/select";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { SUPPORTED_COUNTRIES } from "@/lib/constants";
+import { ALL_COUNTRIES } from "@/lib/constants";
 import {
   CURRENT_YEAR,
   getYearOptions,
@@ -37,6 +37,7 @@ import {
   getRiskBadgeVariant,
   getRiskProgressClass,
   getRiskAriaLabel,
+  getCountryFlag,
 } from "@/lib/form-utils";
 import { useDayTrackerStore } from "@/store/day-tracker-store";
 import { useHydrated } from "@/hooks";
@@ -128,14 +129,12 @@ export function DayTracker() {
     if (!formData.countryCode || !formData.startDate || !formData.endDate)
       return;
 
-    const country = SUPPORTED_COUNTRIES.find(
-      (c) => c.code === formData.countryCode,
-    );
-    if (!country) return;
+    const country =
+      ALL_COUNTRIES.find((c) => c.code === formData.countryCode) || null;
 
     addTrip({
       countryCode: formData.countryCode,
-      countryName: country.name,
+      countryName: country?.name || formData.countryCode,
       startDate: formData.startDate,
       endDate: formData.endDate,
       purpose: formData.purpose,
@@ -426,9 +425,7 @@ export function DayTracker() {
             );
             const riskLevel = getRiskLevel(summary.totalDays, threshold);
             const isExpanded = expandedCountries.has(summary.countryCode);
-            const country = SUPPORTED_COUNTRIES.find(
-              (c) => c.code === summary.countryCode,
-            );
+            const flag = getCountryFlag(summary.countryCode);
             const ariaLabel = getRiskAriaLabel(
               riskLevel,
               summary.totalDays,
@@ -457,7 +454,7 @@ export function DayTracker() {
                   >
                     <div className="flex items-center gap-3">
                       <span className="text-2xl" aria-hidden="true">
-                        {country?.flag}
+                        {flag}
                       </span>
                       <div>
                         <CardTitle className="text-lg">
