@@ -27,6 +27,7 @@ const DEFAULT_TAX_YEAR: SupportedTaxYear = 2024;
 
 const PHYSICAL_PRESENCE_REQUIRED_DAYS =
   TAX_THRESHOLDS.FEIE_PHYSICAL_PRESENCE_DAYS; // 330 days
+const MAX_US_DAYS = 35;
 
 /**
  * Calculate FEIE eligibility and exclusion amount
@@ -45,10 +46,18 @@ export function calculateFEIE(input: FEIEInput): FEIEResult {
   const endDate = new Date(testPeriodEnd);
 
   // Calculate total days in test period
-  const totalTestDays = differenceInDays(endDate, startDate) + 1;
+  const totalTestDays = Math.max(0, differenceInDays(endDate, startDate) + 1);
+
+  // Cap reported days to the test-period length to avoid over-reporting
+  const effectiveDaysOutsideUS = Math.min(
+    Math.max(daysOutsideUS, 0),
+    totalTestDays,
+  );
+  const overReportedDays =
+    Math.max(daysOutsideUS, 0) + Math.max(daysInUS, 0) - totalTestDays;
 
   // For physical presence test, need 330 days in a 365-day period
-  const qualifyingDays = daysOutsideUS;
+  const qualifyingDays = effectiveDaysOutsideUS;
   const requiredDays = PHYSICAL_PRESENCE_REQUIRED_DAYS;
   const daysShort = Math.max(0, requiredDays - qualifyingDays);
 
@@ -63,7 +72,16 @@ export function calculateFEIE(input: FEIEInput): FEIEResult {
   // Calculate pro-rated exclusion if test period doesn't cover full year
   // Pro-ration = (qualifying days in tax year / 365) * max exclusion
   const daysInTaxYear = calculateDaysInTaxYear(startDate, endDate, taxYear);
-  const proRatedExclusion = Math.round((daysInTaxYear / 365) * maxExclusion);
+  const qualifyingDaysInTaxYear =
+    totalTestDays > 0
+      ? Math.min(
+          daysInTaxYear,
+          Math.round((qualifyingDays / totalTestDays) * daysInTaxYear),
+        )
+      : 0;
+  const proRatedExclusion = Math.round(
+    (qualifyingDaysInTaxYear / 365) * maxExclusion,
+  );
 
   // Excludable amount is the lesser of:
   // 1. Foreign earned income
@@ -80,7 +98,7 @@ export function calculateFEIE(input: FEIEInput): FEIEResult {
   if (qualifies) {
     explanation = `You qualify for the FEIE Physical Presence Test with ${qualifyingDays} days outside the US (${requiredDays} required). `;
     if (proRatedExclusion < maxExclusion) {
-      explanation += `Your exclusion is pro-rated to $${proRatedExclusion.toLocaleString()} based on ${daysInTaxYear} qualifying days in ${taxYear}. `;
+      explanation += `Your exclusion is pro-rated to $${proRatedExclusion.toLocaleString()} based on ${qualifyingDaysInTaxYear} qualifying days in ${taxYear}. `;
     }
     explanation += `You can exclude up to $${excludableAmount.toLocaleString()} of your foreign earned income.`;
   } else {
@@ -95,14 +113,19 @@ export function calculateFEIE(input: FEIEInput): FEIEResult {
 
   // Generate warnings
   const warnings: string[] = [];
+  if (overReportedDays > 0) {
+    warnings.push(
+      `You reported ${overReportedDays} more days than fit in a 365-day period. Calculations capped totals to the test period length.`,
+    );
+  }
   if (qualifies && foreignEarnedIncome > maxExclusion) {
     warnings.push(
       `Your income ($${foreignEarnedIncome.toLocaleString()}) exceeds the maximum exclusion. $${(foreignEarnedIncome - maxExclusion).toLocaleString()} will remain taxable.`,
     );
   }
-  if (daysInUS > 35 && qualifies) {
+  if (daysInUS > MAX_US_DAYS) {
     warnings.push(
-      `You spent ${daysInUS} days in the US during your test period. Ensure these were for allowed purposes.`,
+      `You reported ${daysInUS} days in the US during your test period. The Physical Presence Test typically allows no more than ${MAX_US_DAYS} days in the US within the 365-day window.`,
     );
   }
   if (!qualifies && daysShort <= 30) {
