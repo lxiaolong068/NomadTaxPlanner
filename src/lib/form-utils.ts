@@ -2,7 +2,7 @@ import { ALL_COUNTRIES, SUPPORTED_COUNTRIES, TAX_THRESHOLDS } from "./constants"
 import type { SelectOption, RiskLevel } from "@/types";
 
 // Map of known flags so we can label dropdown options even for extended country list
-const FLAG_LOOKUP = new Map(
+const FLAG_LOOKUP = new Map<string, string>(
   SUPPORTED_COUNTRIES.map((country) => [country.code, country.flag])
 );
 
