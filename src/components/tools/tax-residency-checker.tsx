@@ -23,11 +23,12 @@ import { Select } from "@/components/ui/select";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { SUPPORTED_COUNTRIES } from "@/lib/constants";
+import { ALL_COUNTRIES, SUPPORTED_COUNTRIES } from "@/lib/constants";
 import {
   CURRENT_YEAR,
   getYearOptions,
   getCountryOptions,
+  getCountryFlag,
   getRiskBadgeVariant,
   getRiskLabel,
   getRiskProgressClass,
@@ -41,6 +42,8 @@ interface CountryEntry {
   countryCode: string;
   countryName: string;
   days: number;
+  priorYearDays?: number;
+  secondPriorYearDays?: number;
 }
 
 /** Maximum days in a year (accounting for leap years) */
@@ -49,7 +52,14 @@ const MAX_DAYS_IN_YEAR = 366;
 export function TaxResidencyChecker() {
   const [year, setYear] = useState(CURRENT_YEAR);
   const [entries, setEntries] = useState<CountryEntry[]>([
-    { id: "1", countryCode: "", countryName: "", days: 0 },
+    {
+      id: "1",
+      countryCode: "",
+      countryName: "",
+      days: 0,
+      priorYearDays: 0,
+      secondPriorYearDays: 0,
+    },
   ]);
   const [results, setResults] = useState<ResidencyResult[]>([]);
   const [showResults, setShowResults] = useState(false);
@@ -67,7 +77,14 @@ export function TaxResidencyChecker() {
   const addEntry = useCallback(() => {
     setEntries((prev) => [
       ...prev,
-      { id: Date.now().toString(), countryCode: "", countryName: "", days: 0 },
+      {
+        id: Date.now().toString(),
+        countryCode: "",
+        countryName: "",
+        days: 0,
+        priorYearDays: 0,
+        secondPriorYearDays: 0,
+      },
     ]);
   }, []);
 
@@ -86,7 +103,9 @@ export function TaxResidencyChecker() {
         prev.map((e) => {
           if (e.id !== id) return e;
           if (field === "countryCode") {
-            const country = SUPPORTED_COUNTRIES.find((c) => c.code === value);
+            const country =
+              SUPPORTED_COUNTRIES.find((c) => c.code === value) ||
+              ALL_COUNTRIES.find((c) => c.code === value);
             return {
               ...e,
               countryCode: value as string,
@@ -110,6 +129,8 @@ export function TaxResidencyChecker() {
         entry.countryName,
         entry.days,
         year,
+        entry.priorYearDays ?? 0,
+        entry.secondPriorYearDays ?? 0,
       ),
     );
 
@@ -124,7 +145,16 @@ export function TaxResidencyChecker() {
   }, [entries, year]);
 
   const resetForm = useCallback(() => {
-    setEntries([{ id: "1", countryCode: "", countryName: "", days: 0 }]);
+    setEntries([
+      {
+        id: "1",
+        countryCode: "",
+        countryName: "",
+        days: 0,
+        priorYearDays: 0,
+        secondPriorYearDays: 0,
+      },
+    ]);
     setResults([]);
     setShowResults(false);
   }, []);
@@ -140,9 +170,15 @@ export function TaxResidencyChecker() {
             <MapPin className="h-5 w-5" aria-hidden="true" />
             Enter Your Travel Data
           </CardTitle>
-          <CardDescription>
-            Add each country you&apos;ve visited and the number of days spent
-            there.
+          <CardDescription className="space-y-1">
+            <p>
+              Add each country you&apos;ve visited and the number of days spent
+              there.
+            </p>
+            <p className="text-muted-foreground">
+              For the United States, include the previous two years of days to
+              run the Substantial Presence Test accurately.
+            </p>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -166,52 +202,114 @@ export function TaxResidencyChecker() {
             {entries.map((entry, index) => (
               <div
                 key={entry.id}
-                className="flex items-center gap-3"
+                className="space-y-2 rounded-lg border p-3"
                 role="listitem"
               >
-                <div className="flex-1">
-                  <label htmlFor={`country-${entry.id}`} className="sr-only">
-                    Country {index + 1}
-                  </label>
-                  <Select
-                    id={`country-${entry.id}`}
-                    options={countryOptions}
-                    value={entry.countryCode}
-                    onChange={(value) =>
-                      updateEntry(entry.id, "countryCode", value)
-                    }
-                    placeholder="Select country"
-                  />
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="min-w-[200px] flex-1">
+                    <label htmlFor={`country-${entry.id}`} className="sr-only">
+                      Country {index + 1}
+                    </label>
+                    <Select
+                      id={`country-${entry.id}`}
+                      options={countryOptions}
+                      value={entry.countryCode}
+                      onChange={(value) =>
+                        updateEntry(entry.id, "countryCode", value)
+                      }
+                      placeholder="Select country"
+                    />
+                  </div>
+                  <div className="w-32">
+                    <label htmlFor={`days-${entry.id}`} className="sr-only">
+                      Days spent in{" "}
+                      {entry.countryName || `country ${index + 1}`} (current
+                      year)
+                    </label>
+                    <Input
+                      id={`days-${entry.id}`}
+                      type="number"
+                      min={0}
+                      max={MAX_DAYS_IN_YEAR}
+                      value={entry.days || ""}
+                      onChange={(e) =>
+                        updateEntry(
+                          entry.id,
+                          "days",
+                          parseInt(e.target.value) || 0,
+                        )
+                      }
+                      placeholder="Current year"
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeEntry(entry.id)}
+                    disabled={entries.length === 1}
+                    aria-label={`Remove ${entry.countryName || "country"} entry`}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </Button>
                 </div>
-                <div className="w-32">
-                  <label htmlFor={`days-${entry.id}`} className="sr-only">
-                    Days spent in {entry.countryName || `country ${index + 1}`}
-                  </label>
-                  <Input
-                    id={`days-${entry.id}`}
-                    type="number"
-                    min={0}
-                    max={MAX_DAYS_IN_YEAR}
-                    value={entry.days || ""}
-                    onChange={(e) =>
-                      updateEntry(
-                        entry.id,
-                        "days",
-                        parseInt(e.target.value) || 0,
-                      )
-                    }
-                    placeholder="Days"
-                  />
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeEntry(entry.id)}
-                  disabled={entries.length === 1}
-                  aria-label={`Remove ${entry.countryName || "country"} entry`}
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
+
+                {entry.countryCode === "US" && (
+                  <div className="space-y-2 rounded-md bg-muted/40 p-3">
+                    <p className="text-sm text-muted-foreground">
+                      US Substantial Presence Test: current year days + 1/3 of
+                      prior year + 1/6 of the year before that (needs 31+ days
+                      in the current year).
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="flex items-center gap-2">
+                        <label
+                          htmlFor={`prior-${entry.id}`}
+                          className="text-sm text-muted-foreground"
+                        >
+                          Prior year days
+                        </label>
+                        <Input
+                          id={`prior-${entry.id}`}
+                          type="number"
+                          min={0}
+                          max={MAX_DAYS_IN_YEAR}
+                          value={entry.priorYearDays ?? ""}
+                          onChange={(e) =>
+                            updateEntry(
+                              entry.id,
+                              "priorYearDays",
+                              parseInt(e.target.value) || 0,
+                            )
+                          }
+                          placeholder="e.g. 90"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label
+                          htmlFor={`second-prior-${entry.id}`}
+                          className="text-sm text-muted-foreground"
+                        >
+                          2 years ago
+                        </label>
+                        <Input
+                          id={`second-prior-${entry.id}`}
+                          type="number"
+                          min={0}
+                          max={MAX_DAYS_IN_YEAR}
+                          value={entry.secondPriorYearDays ?? ""}
+                          onChange={(e) =>
+                            updateEntry(
+                              entry.id,
+                              "secondPriorYearDays",
+                              parseInt(e.target.value) || 0,
+                            )
+                          }
+                          placeholder="e.g. 60"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -269,6 +367,7 @@ export function TaxResidencyChecker() {
               result.daysSpent,
               result.threshold,
             );
+            const flag = getCountryFlag(result.countryCode);
 
             return (
               <Card
@@ -284,13 +383,11 @@ export function TaxResidencyChecker() {
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">
-                      <span aria-hidden="true">
-                        {
-                          SUPPORTED_COUNTRIES.find(
-                            (c) => c.code === result.countryCode,
-                          )?.flag
-                        }{" "}
-                      </span>
+                      {flag ? (
+                        <span aria-hidden="true" className="mr-1">
+                          {flag}
+                        </span>
+                      ) : null}
                       {result.countryName}
                     </CardTitle>
                     <Badge

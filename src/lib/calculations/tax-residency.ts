@@ -135,13 +135,18 @@ export function calculateResidencyStatus(
   countryCode: string,
   countryName: string,
   daysSpent: number,
-  year: number = new Date().getFullYear()
+  year: number = new Date().getFullYear(),
+  priorYearDays: number = 0,
+  secondPriorYearDays: number = 0
 ): ResidencyResult {
   const rule = getCountryTaxRule(countryCode, countryName)
-  const threshold = rule.residencyThreshold
-  const isResident = daysSpent >= threshold
-  const daysRemaining = Math.max(0, threshold - daysSpent)
-  const percentageOfThreshold = Math.min(100, Math.round((daysSpent / threshold) * 100))
+  let threshold = rule.residencyThreshold
+
+  // Default to simple day counting; override for US Substantial Presence Test
+  let effectiveDays = daysSpent
+  let percentageOfThreshold = Math.min(100, Math.round((effectiveDays / threshold) * 100))
+  let isResident = effectiveDays >= threshold
+  let daysRemaining = Math.max(0, threshold - effectiveDays)
 
   let riskLevel: ResidencyResult['riskLevel']
   if (isResident) {
@@ -155,6 +160,41 @@ export function calculateResidencyStatus(
   }
 
   const warnings: string[] = []
+  const recommendations: string[] = []
+
+  if (countryCode === 'US') {
+    const spt = calculateUSSubstantialPresence(daysSpent, priorYearDays, secondPriorYearDays)
+
+    effectiveDays = spt.totalDays
+    threshold = rule.residencyThreshold
+    isResident = spt.meetsThreshold
+    percentageOfThreshold = Math.min(100, Math.round((effectiveDays / threshold) * 100))
+    daysRemaining = Math.max(0, threshold - effectiveDays)
+    riskLevel = isResident
+      ? 'resident'
+      : percentageOfThreshold >= 90
+        ? 'high'
+        : percentageOfThreshold >= 70
+          ? 'medium'
+          : 'low'
+
+    warnings.push(
+      `Substantial Presence Test weighted total: ${effectiveDays} days (current year: ${spt.breakdown.currentYear}, prior year weighted: ${spt.breakdown.priorYear}, second prior weighted: ${spt.breakdown.secondPriorYear}).`
+    )
+
+    if (daysSpent < 31) {
+      warnings.push(
+        'You have fewer than 31 days in the current year, so the Substantial Presence Test is not met even if the weighted total exceeds 183.'
+      )
+    }
+
+    if (!isResident && priorYearDays === 0 && secondPriorYearDays === 0) {
+      recommendations.push(
+        'Add prior-year day totals to improve accuracy for the US Substantial Presence Test.'
+      )
+    }
+  }
+
   if (isResident) {
     warnings.push(`You have exceeded the ${threshold}-day threshold and are likely a tax resident.`)
     warnings.push('Consult a tax professional to understand your obligations.')
@@ -165,7 +205,6 @@ export function calculateResidencyStatus(
     warnings.push(`${daysRemaining} days remaining - monitor your travel carefully.`)
   }
 
-  const recommendations: string[] = []
   if (isResident) {
     recommendations.push('Review double tax treaty provisions between countries.')
     recommendations.push('Consider consulting with a tax professional.')
@@ -181,7 +220,7 @@ export function calculateResidencyStatus(
     countryCode,
     countryName,
     year,
-    daysSpent,
+    daysSpent: effectiveDays,
     threshold,
     isResident,
     daysRemaining,

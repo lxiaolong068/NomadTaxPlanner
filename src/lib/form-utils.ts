@@ -1,5 +1,10 @@
-import { SUPPORTED_COUNTRIES, TAX_THRESHOLDS } from "./constants";
+import { ALL_COUNTRIES, SUPPORTED_COUNTRIES, TAX_THRESHOLDS } from "./constants";
 import type { SelectOption, RiskLevel } from "@/types";
+
+// Map of known flags so we can label dropdown options even for extended country list
+const FLAG_LOOKUP = new Map(
+  SUPPORTED_COUNTRIES.map((country) => [country.code, country.flag])
+);
 
 /**
  * Current year constant - use this instead of creating new Date() in components
@@ -23,10 +28,13 @@ export function getYearOptions(yearsBack: number = 5): SelectOption[] {
  * @returns Array of SelectOption objects with flag emoji
  */
 export function getCountryOptions(): SelectOption[] {
-  return SUPPORTED_COUNTRIES.map((c) => ({
-    value: c.code,
-    label: `${c.flag} ${c.name}`,
-  }));
+  return ALL_COUNTRIES.map((country) => {
+    const flag = FLAG_LOOKUP.get(country.code);
+    return {
+      value: country.code,
+      label: flag ? `${flag} ${country.name}` : country.name,
+    };
+  });
 }
 
 /**
@@ -124,4 +132,11 @@ export function getRiskAriaLabel(
   const percentage = Math.round((days / threshold) * 100);
   const label = getRiskLabel(riskLevel);
   return `${label}: ${days} of ${threshold} days (${percentage}%)`;
+}
+
+/**
+ * Get emoji flag for a country code if known
+ */
+export function getCountryFlag(code: string): string | undefined {
+  return FLAG_LOOKUP.get(code);
 }
