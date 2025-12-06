@@ -1,7 +1,16 @@
 import { MetadataRoute } from 'next'
-import { SUPPORTED_COUNTRIES } from '@/lib/constants'
+import { SUPPORTED_COUNTRIES, TOOL_LINKS } from '@/lib/constants'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://nomadtaxplanner.com'
+
+// Learn section sub-pages
+const LEARN_PAGES = [
+  'basics',
+  'tax-residency',
+  'double-taxation',
+  'freelancer-taxes',
+  'glossary',
+] as const
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date()
@@ -18,24 +27,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       url: `${BASE_URL}/tools`,
       lastModified: now,
       changeFrequency: 'weekly',
-      priority: 0.9,
-    },
-    {
-      url: `${BASE_URL}/tools/tax-residency-checker`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
-      url: `${BASE_URL}/tools/day-tracker`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
-      url: `${BASE_URL}/tools/feie-calculator`,
-      lastModified: now,
-      changeFrequency: 'monthly',
       priority: 0.9,
     },
     {
@@ -62,9 +53,29 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'monthly',
       priority: 0.6,
     },
+    {
+      url: `${BASE_URL}/privacy`,
+      lastModified: now,
+      changeFrequency: 'yearly',
+      priority: 0.3,
+    },
+    {
+      url: `${BASE_URL}/terms`,
+      lastModified: now,
+      changeFrequency: 'yearly',
+      priority: 0.3,
+    },
   ]
 
-  // Country guide pages
+  // Tool pages - dynamically generated from TOOL_LINKS
+  const toolPages: MetadataRoute.Sitemap = TOOL_LINKS.map((tool) => ({
+    url: `${BASE_URL}${tool.href}`,
+    lastModified: now,
+    changeFrequency: 'monthly' as const,
+    priority: 0.9,
+  }))
+
+  // Country guide pages - dynamically generated from SUPPORTED_COUNTRIES
   const countryPages: MetadataRoute.Sitemap = SUPPORTED_COUNTRIES.map((country) => ({
     url: `${BASE_URL}/guides/${country.slug}`,
     lastModified: now,
@@ -72,5 +83,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }))
 
-  return [...staticPages, ...countryPages]
+  // Learn sub-pages
+  const learnPages: MetadataRoute.Sitemap = LEARN_PAGES.map((slug) => ({
+    url: `${BASE_URL}/learn/${slug}`,
+    lastModified: now,
+    changeFrequency: 'monthly' as const,
+    priority: 0.6,
+  }))
+
+  return [...staticPages, ...toolPages, ...countryPages, ...learnPages]
 }
