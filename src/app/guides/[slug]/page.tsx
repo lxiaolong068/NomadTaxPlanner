@@ -115,6 +115,18 @@ export default async function CountryGuidePage({ params }: PageProps) {
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <Breadcrumb items={breadcrumbItems} />
 
+        {/* Country Hero Image */}
+        {guide.image && (
+          <div className="mb-8 rounded-xl overflow-hidden relative h-48 md:h-64">
+            <img
+              src={guide.image}
+              alt={`${guide.name} landscape`}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
+          </div>
+        )}
+
         {/* Header */}
         <header className="mb-8">
           <Link

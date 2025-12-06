@@ -89,6 +89,7 @@ export interface CountryGuide {
   language: string;
   specialPrograms?: string[];
   lastUpdated: string;
+  image?: string;
 }
 
 export interface CountryTaxInfo {

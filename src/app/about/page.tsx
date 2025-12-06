@@ -58,7 +58,13 @@ export default function AboutPage() {
   return (
     <>
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-b from-primary/5 to-background py-20 md:py-32">
+      <section className="relative bg-gradient-to-b from-primary/5 to-background py-20 md:py-32 overflow-hidden">
+        {/* Hero Background Image */}
+        <img
+          src="https://oxnbbm6ljoyuzqns.public.blob.vercel-storage.com/remote-worker-cafe-laptop-coffee-travel/zDLU0DRe0WI.jpg"
+          alt="Remote worker in a cafe"
+          className="absolute inset-0 w-full h-full object-cover opacity-10 -z-10"
+        />
         <div className="container mx-auto px-4 max-w-6xl">
           <div className="text-center max-w-3xl mx-auto">
             <Badge variant="secondary" className="mb-4">
@@ -187,7 +193,9 @@ export default function AboutPage() {
                 provide.
               </p>
               <p>
-                <strong>Always consult with a qualified tax professional</strong>{" "}
+                <strong>
+                  Always consult with a qualified tax professional
+                </strong>{" "}
                 before making any tax-related decisions. We are not responsible
                 for any actions taken based on the information provided on this
                 website.

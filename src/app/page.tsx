@@ -74,7 +74,13 @@ export default function HomePage() {
   return (
     <>
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-b from-primary/5 to-background py-20 md:py-32">
+      <section className="relative bg-gradient-to-b from-primary/5 to-background py-20 md:py-32 overflow-hidden">
+        {/* Hero Background Image */}
+        <img
+          src="https://oxnbbm6ljoyuzqns.public.blob.vercel-storage.com/digital-nomad-working-laptop-beach-tropical/Wu2MXvbyt7w.jpg"
+          alt="Digital nomad working remotely"
+          className="absolute inset-0 w-full h-full object-cover opacity-10 -z-10"
+        />
         <div className="container mx-auto px-4 max-w-6xl">
           <div className="text-center max-w-3xl mx-auto">
             <Badge variant="secondary" className="mb-4">
